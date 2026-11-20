@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!requirements.txt
+!pipeline/
+!pipeline/**
+**/__pycache__/
