@@ -1,6 +1,6 @@
 *
 !Dockerfile
-!requirements.txt
-!pipeline/
-!pipeline/**
-**/__pycache__/
+!Cargo.toml
+!Cargo.lock
+!src/
+!src/**

@@ -5,3 +5,4 @@
 /starter-*.zip
 /starter-*/
 __pycache__/
+/target/
