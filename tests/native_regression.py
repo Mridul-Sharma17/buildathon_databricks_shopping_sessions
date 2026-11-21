@@ -48,6 +48,9 @@ def main(command):
                 kind, price = ("purchase", "1") if i == 0 else ("view", "")
                 ts = f1(stamp(64))
                 events.append(f"reuse{shopper}-{i},reuse{shopper},{ts},{ts},{kind},p1,{price}")
+        long_user = "long-" + "u" * 300
+        ts = f1(stamp(1))
+        events.append(f'"e-long","{long_user}","{ts}","{ts}",view,p1,')
         (data / "events" / "part-0.csv").write_bytes(header + malformed + "\n".join(events).encode())
 
         clicks = [
@@ -71,14 +74,37 @@ def main(command):
                 FROM read_parquet(?) WHERE starts_with(user_id, 'reuse')
             """, [str(out / "user_daily" / "*.parquet")]).fetchone()
             assert reused == (129, 129), reused
+            long_row = db.execute("""
+                SELECT sessions, events, revenue_cents, top_category
+                FROM read_parquet(?) WHERE user_id = ?
+            """, [str(out / "user_daily" / "*.parquet"), long_user]).fetchall()
+            assert long_row == [(1, 1, 0, None)], long_row
             campaign = db.execute("""
                 SELECT campaign_id, sum(sessions), sum(purchasing_sessions), sum(revenue_cents), sum(assisted_sessions)
                 FROM read_parquet(?) GROUP BY campaign_id ORDER BY campaign_id
             """, [str(out / "campaign_daily" / "*.parquet")]).fetchall()
             assert campaign == [
                 ("a", 64, 0, 0, 130), ("b", 66, 1, 100, 66), ("c", 0, 0, 0, 66),
-                ("d", 0, 0, 0, 85), ("organic", 129, 129, 129, 0),
+                ("d", 0, 0, 0, 85), ("organic", 130, 129, 129, 0),
             ], campaign
+
+        wide = root / "wide-window"
+        (data / "manifest.json").write_text(json.dumps({
+            "window_start": f1(start), "window_end": f1(start + timedelta(days=60)),
+        }))
+        subprocess.run(command, env=dict(os.environ, DATA_DIR=str(data), OUTPUT_DIR=str(wide), NCPU="4"), check=True)
+        with duckdb.connect() as db:
+            for table in ("user_daily", "campaign_daily"):
+                left = str(out / table / "*.parquet")
+                right = str(wide / table / "*.parquet")
+                difference = db.execute("""
+                    SELECT count(*) FROM (
+                        (SELECT * FROM read_parquet(?) EXCEPT ALL SELECT * FROM read_parquet(?))
+                        UNION ALL
+                        (SELECT * FROM read_parquet(?) EXCEPT ALL SELECT * FROM read_parquet(?))
+                    )
+                """, [left, right, right, left]).fetchone()[0]
+                assert difference == 0, (table, difference)
 
 
 if __name__ == "__main__":

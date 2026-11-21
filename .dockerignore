@@ -1,6 +1,6 @@
 *
 !Dockerfile
-!Cargo.toml
-!Cargo.lock
-!src/
-!src/**
+!native/
+!native/Makefile
+!native/*.c
+!native/*.h
